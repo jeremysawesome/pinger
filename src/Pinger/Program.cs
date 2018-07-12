@@ -1,14 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.NetworkInformation;
-using System.Text;
-using System.Threading;
-
-namespace Pinger
+﻿namespace Pinger
 {
-    class Pinger
-    {
+    using System;
+    using System.Collections.Generic;
+    using System.Net.NetworkInformation;
+    using System.Text;
+    using System.Threading;
 
+    internal class Pinger
+    {
         static void PingHost(string host)
         {
             // Ping Reply class
@@ -46,14 +45,12 @@ namespace Pinger
             };
 
             foreach (var host in hosts)
-            {
-                PingHost(host);  
-            }
+                PingHost(host);
             Console.WriteLine("Ping example completed.");
             Console.Read();
         }
 
-        static void PingCompletedCallback( object sender, PingCompletedEventArgs eventArgs )
+        static void PingCompletedCallback(object sender, PingCompletedEventArgs eventArgs)
         {
             // If the operation was canceled, display a message to the user.  
             if (eventArgs.Cancelled)
@@ -63,7 +60,7 @@ namespace Pinger
                 // Let the main thread resume.   
                 // UserToken is the AutoResetEvent object that the main thread      
                 // is waiting for.  
-                ((AutoResetEvent)eventArgs.UserState).Set();
+                ((AutoResetEvent) eventArgs.UserState).Set();
             }
 
             // If an error occurred, display the exception to the user.  
@@ -73,7 +70,7 @@ namespace Pinger
                 Console.WriteLine(eventArgs.Error.ToString());
 
                 // Let the main thread resume.   
-                ((AutoResetEvent)eventArgs.UserState).Set();
+                ((AutoResetEvent) eventArgs.UserState).Set();
             }
 
             var reply = eventArgs.Reply;
@@ -81,7 +78,7 @@ namespace Pinger
             DisplayReply(reply);
 
             // Let the main thread resume.  
-            ((AutoResetEvent)eventArgs.UserState).Set();
+            ((AutoResetEvent) eventArgs.UserState).Set();
         }
 
         static void DisplayReply(PingReply reply)
@@ -92,7 +89,7 @@ namespace Pinger
             Console.WriteLine("ping status: {0}", reply.Status);
             if (reply.Status != IPStatus.Success) return;
 
-            Console.WriteLine("Address: {0}", reply.Address.ToString());
+            Console.WriteLine("Address: {0}", reply.Address);
             Console.WriteLine("RoundTrip time: {0}", reply.RoundtripTime);
             Console.WriteLine("Time to live: {0}", reply.Options.Ttl);
             Console.WriteLine("Don't fragment: {0}", reply.Options.DontFragment);
