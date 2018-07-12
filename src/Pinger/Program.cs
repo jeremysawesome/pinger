@@ -5,6 +5,7 @@
     using System.Net.NetworkInformation;
     using System.Text;
     using System.Threading;
+    
 
     internal class Pinger
     {
@@ -94,6 +95,40 @@
             Console.WriteLine("Time to live: {0}", reply.Options.Ttl);
             Console.WriteLine("Don't fragment: {0}", reply.Options.DontFragment);
             Console.WriteLine("Buffer size: {0}", reply.Buffer.Length);
+        }
+
+        static void Schedule()
+        {
+            var scheduler = StdSchedulerFactory.GetDefaultScheduler();
+            scheduler.Start();
+
+            var job = JobBuilder.Create<JobRunner>()
+                .WithIdentity("pingerJob")
+                .Build();
+
+            var trigger = TriggerBuilder.Create()
+                .WithIdentity("pingerJob")
+                .StartNow()
+                .WithSimpleSchedule(x => x
+                    .WithIntervalInSeconds( 30 )
+                    .RepeatForever())
+                .Build();
+
+            scheduler.ScheduleJob(job, trigger);
+            scheduler.ScheduleJob(nightlyJob, nightlyTrigger);
+        }
+
+        static void Run()
+        {
+            // run the program
+        }
+
+        class JobRunner : IJob
+        {
+            public void Execute(IJobExecutionContext context)
+            {
+                Run();
+            }
         }
     }
 }
