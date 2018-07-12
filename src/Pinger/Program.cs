@@ -5,7 +5,9 @@
     using System.Net.NetworkInformation;
     using System.Text;
     using System.Threading;
-    
+    using Quartz;
+    using Quartz.Impl;
+
 
     internal class Pinger
     {
@@ -39,16 +41,7 @@
 
         static void Main()
         {
-            var hosts = new List<string>
-            {
-                "8.8.8.8",
-                "192.168.86.1"
-            };
-
-            foreach (var host in hosts)
-                PingHost(host);
-            Console.WriteLine("Ping example completed.");
-            Console.Read();
+            Schedule();
         }
 
         static void PingCompletedCallback(object sender, PingCompletedEventArgs eventArgs)
@@ -110,17 +103,26 @@
                 .WithIdentity("pingerJob")
                 .StartNow()
                 .WithSimpleSchedule(x => x
-                    .WithIntervalInSeconds( 30 )
+                    .WithIntervalInSeconds(30)
                     .RepeatForever())
                 .Build();
 
             scheduler.ScheduleJob(job, trigger);
-            scheduler.ScheduleJob(nightlyJob, nightlyTrigger);
         }
 
         static void Run()
         {
             // run the program
+            var hosts = new List<string>
+            {
+                "8.8.8.8",
+                "192.168.86.1"
+            };
+
+            foreach (var host in hosts)
+            {
+                PingHost(host);
+            }
         }
 
         class JobRunner : IJob
