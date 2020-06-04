@@ -2,7 +2,9 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
     using System.Net.NetworkInformation;
+    using System.Runtime.CompilerServices;
     using System.Text;
     using System.Threading;
     using Quartz;
@@ -11,8 +13,30 @@
 
     internal class Pinger
     {
-        static void PingHost(string host)
+        class Host
         {
+            public string Name { get; set; }
+            public string Address { get; set; }
+
+            public int Attempts { get; set; }
+            public int Successes { get; set; }
+            public int Fails { get; set; }
+            public int Exceptions { get; set; }
+        }
+
+        static readonly Dictionary<string, Host> Hosts = new Dictionary<string, Host>
+        {
+            { "127.0.0.1", new Host { Address = "127.0.0.1", Name="localhost" } },
+            { "192.168.0.1", new Host { Address = "192.168.0.1", Name="Wireless Router" } },
+            { "192.168.0.105", new Host { Address = "192.168.0.105", Name="WD Mycloud (Intranet)" } },
+            { "8.8.8.8", new Host { Address = "8.8.8.8", Name="External (Internet)" } },
+        };
+
+        static void PingHost(Host host)
+        {
+            // increment the host attempts
+            host.Attempts++;
+
             // Ping Reply class
             //https://msdn.microsoft.com/en-us/library/system.net.networkinformation.ping%28v=vs.110%29.aspx?f=255&MSPPError=-2147217396
             var ping = new Ping();
@@ -36,58 +60,71 @@
             // Send the ping asynchronously.  
             // Use the waiter as the user token.  
             // When the callback completes, it can wake up this thread.  
-            ping.SendAsync(host, timeout, buffer, options, waiter);
+            try
+            {
+                ping.SendAsync(host.Address, timeout, buffer, options, waiter);
+            }
+            catch
+            {
+                host.Exceptions++;
+            }
+
         }
 
         static void Main()
         {
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
             Schedule();
+        }
+
+        static void Log()
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var path = appData + "\\Pinger\\" + "\\pinger_log.txt";
+
+            if (!File.Exists(path))
+            {
+                Directory.CreateDirectory(appData + "\\Pinger");
+            }
+
+            // build log
+                var hostInfos = new List<string>();
+            foreach (var value in Hosts)
+            {
+                var host = value.Value;
+                var upPercent = ((double)host.Successes / host.Attempts) * 100f;
+                hostInfos.Add( String.Format( "[{6:s}] Host: {0} was up {1} percent of the time. Attempts: {2}, Success: {3}, Exceptions: {4}, Failures: {5}",
+                    host.Name, upPercent, host.Attempts, host.Successes, host.Exceptions, host.Fails, DateTime.Now) );
+            }
+
+            File.AppendAllLines(path, hostInfos);
+        }
+
+        static void OnProcessExit(object sender, EventArgs e)
+        {
+            Log();
         }
 
         static void PingCompletedCallback(object sender, PingCompletedEventArgs eventArgs)
         {
-            // If the operation was canceled, display a message to the user.  
-            if (eventArgs.Cancelled)
+            if (eventArgs.Cancelled || eventArgs.Error != null)
             {
-                Console.WriteLine("Ping canceled.");
-
                 // Let the main thread resume.   
                 // UserToken is the AutoResetEvent object that the main thread      
                 // is waiting for.  
                 ((AutoResetEvent) eventArgs.UserState).Set();
             }
 
-            // If an error occurred, display the exception to the user.  
-            if (eventArgs.Error != null)
-            {
-                Console.WriteLine("Ping failed:");
-                Console.WriteLine(eventArgs.Error.ToString());
-
-                // Let the main thread resume.   
-                ((AutoResetEvent) eventArgs.UserState).Set();
-            }
-
             var reply = eventArgs.Reply;
-
-            DisplayReply(reply);
+            Host host;
+            if (Hosts.TryGetValue(reply.Address.ToString(), out host))
+            {
+                if (reply.Status == IPStatus.Success) host.Successes++;
+                else host.Fails++;
+            }
 
             // Let the main thread resume.  
             ((AutoResetEvent) eventArgs.UserState).Set();
-        }
-
-        static void DisplayReply(PingReply reply)
-        {
-            if (reply == null)
-                return;
-
-            Console.WriteLine("ping status: {0}", reply.Status);
-            if (reply.Status != IPStatus.Success) return;
-
-            Console.WriteLine("Address: {0}", reply.Address);
-            Console.WriteLine("RoundTrip time: {0}", reply.RoundtripTime);
-            Console.WriteLine("Time to live: {0}", reply.Options.Ttl);
-            Console.WriteLine("Don't fragment: {0}", reply.Options.DontFragment);
-            Console.WriteLine("Buffer size: {0}", reply.Buffer.Length);
         }
 
         static void Schedule()
@@ -103,26 +140,26 @@
                 .WithIdentity("pingerJob")
                 .StartNow()
                 .WithSimpleSchedule(x => x
-                    .WithIntervalInSeconds(30)
+                    .WithIntervalInSeconds(10)
                     .RepeatForever())
                 .Build();
 
             scheduler.ScheduleJob(job, trigger);
         }
 
+        static int runs = 0;
+
         static void Run()
         {
-            // run the program
-            var hosts = new List<string>
+            foreach (var host in Hosts)
             {
-                "8.8.8.8",
-                "192.168.86.1"
-            };
-
-            foreach (var host in hosts)
-            {
-                PingHost(host);
+                PingHost(host.Value);
             }
+            runs++;
+
+            if (runs % 20 != 0) return;
+            runs = 0;
+            Log();
         }
 
         class JobRunner : IJob
